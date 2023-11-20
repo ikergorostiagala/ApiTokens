@@ -1,0 +1,121 @@
+﻿@page "/"
+@using System.Text; @* Encoding.UTF8*@
+@using System.Text.Json; @* JsonSerializer.DeserializeAsyn*@
+@using amadeus;
+@using amadeus.resources;
+@using amadeus.util;
+@using AmadeusAPI.Models;
+@inject HttpClient http;
+<PageTitle>Amadeus</PageTitle>
+<button class="btn btn-primary" @onclick="ObtenerToken" disabled=@TokenValido>Crear el
+token</button>
+<p>Token: @bearerToken</p>
+<p>Tiempo que le queda de vida al token en minutos: @DifMinutos</p>
+<button class="btn btn-primary" @onclick="FlightDestinations"
+disabled=@DisplayButton>FlightDestinations</button>
+@if (FlightDestinationsResp != null && FlightDestinationsResp.data.Length > 0)
+{
+@*https://getbootstrap.com/docs/4.0/layout/grid/
+https://getbootstrap.com/docs/5.0/content/tables/
+*@
+@foreach (Datum item in FlightDestinationsResp.data)
+{
+<div class="container">
+<div class="row">
+<div class="col">@item.origin </div>
+<div class="col">@item.destination </div>
+<div class="col">@item.departureDate</div>
+<div class="col">@item.returnDate</div>
+<div class="col">@item.price.total</div>
+<div class="col">
+<button class="btn btn-outline-primary" @onclick="()=>GetDetalles(item.price.total)">
+Detalles</button>
+</div>
+</div>
+</div>
+}
+<Select class="form-select" value="destination" @onchange="ChangeDest">
+@* @for (int i = 0; i < FlightDestinationsResp.data.Length; i++)
+{
+<option
+value="@FlightDestinationsResp.data[i].destination">@FlightDestinationsResp.data[i].destination</optio
+n>
+}*@
+@foreach (Datum item in FlightDestinationsResp.data)
+{
+<option value="@item.destination">@item.destination</option>
+}
+</Select>
+}
+<p>@destination</p>
+<p>@precio</p>
+@code {
+string apikey = "lENvE2wu05u69hnoEko7F"; // ERROR POR EL NOMBRE APIKEY
+string apisecret = "O4oxrX”; // ERROR POR EL NOMBRE APISECRET
+
+string aaa = "lENvE2wu05u69hno";
+string bbb = "O4oxr";
+private string? bearerToken;
+string cityCode = "BOS";
+DateTime horaActual;
+DateTime horaInicio;
+int year = 2022;
+Boolean TokenValido = false;
+Boolean DisplayButton = true;
+private static System.Timers.Timer? aTimer;
+int DifMinutos;
+FlightDestinationsModel? FlightDestinationsResp;
+string destination;
+string precio;
+//https://developers.amadeus.com/blog/integrate-amadeus-travel-api-csharp
+void GetDetalles(string destino)
+{
+precio = destino;
+}
+void ChangeDest(ChangeEventArgs e)
+{
+destination = e.Value.ToString();
+}
+public async Task ObtenerToken()
+{
+if (TokenValido == false)
+{
+var message1 = new HttpRequestMessage(HttpMethod.Post,
+"https://test.api.amadeus.com/v1/security/oauth2/token");
+message1.Content = new
+StringContent($"grant_type=client_credentials&client_id={aaa}&client_secret={bbb}", Encoding.UTF8,
+"application/x-www-form-urlencoded");
+var results1 = await http.SendAsync(message1);
+await using var stream1 = await results1.Content.ReadAsStreamAsync();
+var oauthResults = await JsonSerializer.DeserializeAsync<OAuthResults>(stream1);
+bearerToken = oauthResults.access_token;
+TokenValido = true;
+DisplayButton = false;
+}
+horaInicio = DateTime.Now;
+aTimer = new System.Timers.Timer(1000);
+aTimer.Elapsed += CountDownTimer;
+aTimer.Enabled = true;
+}
+public void CountDownTimer(Object source, System.Timers.ElapsedEventArgs e)
+{
+horaActual = DateTime.Now;
+DifMinutos = 30 - (horaActual - horaInicio).Minutes;
+if (DifMinutos == 0)
+{
+TokenValido = false;
+aTimer.Enabled = false;
+}
+InvokeAsync(StateHasChanged);
+}
+
+public async Task FlightDestinations()
+{
+var message = new HttpRequestMessage(HttpMethod.Get,
+$"https://test.api.amadeus.com/v1/shopping/flight-destinations?origin=PAR&maxPrice=200");
+http.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
+var response = await http.SendAsync(message);
+using var stream = await response.Content.ReadAsStreamAsync();
+FlightDestinationsResp = await JsonSerializer.DeserializeAsync<FlightDestinationsModel>(stream);
+}
+}
